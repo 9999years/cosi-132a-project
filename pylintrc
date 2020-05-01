@@ -1,0 +1,10 @@
+[MESSAGES CONTROL]
+disable=bad-continuation,
+        no-member,
+        not-an-iterable,
+        unsubscriptable-object,
+
+enable=c-extension-no-member
+
+[FORMAT]
+ignore-long-lines=https?://
