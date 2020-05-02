@@ -9,6 +9,7 @@ let
     mypy # type checking
     black # code formatting
     pylint # general linting
+    jedi # completion
     ptpython # repl
     pytest # unit tests
     # rope # ???

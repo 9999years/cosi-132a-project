@@ -1,3 +1,6 @@
+[BASIC]
+good-names=i,j,k,ex,Run,_,T,f
+
 [MESSAGES CONTROL]
 disable=bad-continuation,
         no-member,
