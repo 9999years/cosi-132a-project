@@ -8,6 +8,7 @@ import typing as t
 from datetime import datetime
 from os import path
 import json
+import enum
 
 import attr
 from cached_property import cached_property
@@ -17,7 +18,7 @@ from .pdf_json import FullText
 _DATETIME_2020 = datetime(2020, 1, 1)
 
 
-def _parse_date(d: str) -> t.Optional[datetime]:
+def _parse_date(date: str) -> t.Optional[datetime]:
     """Parse a value in the corpus publish_time column.
 
     >>> _parse_date('2020')
@@ -25,14 +26,14 @@ def _parse_date(d: str) -> t.Optional[datetime]:
     >>> _parse_date('2003-04-28')
     datetime.datetime(2003, 4, 28, 0, 0)
     """
-    if not d:
+    if not date:
         return None
-    if d == "2020":
+    if date == "2020":
         return _DATETIME_2020
     try:
-        return datetime.fromisoformat(d)
+        return datetime.fromisoformat(date)
     except ValueError:
-        return datetime.strptime(d, "%Y")
+        return datetime.strptime(date, "%Y")
 
 
 def _parse_authors(authors: t.Optional[str]) -> t.List[str]:
@@ -45,18 +46,18 @@ T = t.TypeVar("T")
 
 
 @t.overload
-def _optional(s: str) -> t.Optional[str]:
+def _optional(value: str) -> t.Optional[str]:
     ...
 
 
 @t.overload
 def _optional(
-    s: str, converter: t.Optional[t.Callable[[str], T]] = None
+    value: str, converter: t.Optional[t.Callable[[str], T]] = None
 ) -> t.Optional[T]:
     ...
 
 
-def _optional(s, converter=None):  # type: ignore
+def _optional(value, converter=None):  # type: ignore
     """Convert a CSV field to a value.
 
     Returns ``None`` for empty strings.
@@ -68,11 +69,47 @@ def _optional(s, converter=None):  # type: ignore
     >>> _optional('123', converter=int)
     123
     """
-    return None if not s else (s if converter is None else converter(s))
+    return None if not value else (value if converter is None else converter(value))
 
 
-def _sha(s: str) -> t.List[str]:
-    return s.split(";") if s else []
+def _sha(sha: str) -> t.List[str]:
+    return sha.split(";") if sha else []
+
+
+def _maybe_load_article(filename: str) -> t.Optional[FullText]:
+    if path.exists(filename):
+        with open(filename) as f:
+            return FullText.from_json(json.load(f))
+    return None
+
+
+class _FullTextKind(enum.Enum):
+    PDF = enum.auto()
+    PMC = enum.auto()
+
+    @property
+    def dir_name(self) -> str:
+        """Directory name for this variant.
+        """
+        return {_FullTextKind.PDF: "pdf_json", _FullTextKind.PMC: "pmc_json",}[self]
+
+    @property
+    def full_text_file_values(self) -> t.List[str]:
+        """Values of Article.full_text_file that have data of this type.
+        """
+        return {
+            _FullTextKind.PDF: [
+                "biorxiv_medrxiv",
+                "comm_use_subset",
+                "custom_license",
+                "noncomm_use_subset",
+            ],
+            _FullTextKind.PMC: [
+                "comm_use_subset",
+                "custom_license",
+                "noncomm_use_subset",
+            ],
+        }[self]
 
 
 UID = t.NewType("UID", str)
@@ -105,72 +142,40 @@ class Article:
 
     _corpus: t.Optional["Corpus"] = None
 
-    def pdf_json(self) -> t.Iterator[FullText]:
+    def _json_preconditions(self, kind: _FullTextKind) -> None:
         if self._corpus is None:
             raise ValueError(
-                "Article must be initialized with a non-None Corpus to access pdf_json data."
+                f"Article must be initialized with a non-None Corpus to access {kind.dir_name} data."
             )
-        if self.full_text_file not in [
-            "biorxiv_medrxiv",
-            "comm_use_subset",
-            "custom_license",
-            "noncomm_use_subset",
-        ]:
-            if self.has_pdf_parse:
-                print(
-                    "Model failure: has_pdf_parse=True but not in expected dataset!!!!"
-                )
-                raise ValueError
 
+        if self.full_text_file not in kind.full_text_file_values:
             raise ValueError(
-                f"Article must be in biorxiv_medrxiv, comm_use_subset, noncomm_use_subset, or custom_license datasets to access pdf_json data, not {self.full_text_file}"
+                f"Article must be in one of {', '.join(kind.full_text_file_values)} datasets to access {kind.dir_name} data, not {self.full_text_file}"
             )
 
-        for sha in self.sha:
-            json_pdf_fname = path.join(
-                self._corpus.data_dir,
-                self.full_text_file,
-                self.full_text_file,
-                "pdf_json",
-                f"{sha}.json",
-            )
-
-            if path.exists(json_pdf_fname):
-                with open(json_pdf_fname) as f:
-                    yield FullText.from_json(json.load(f))
-
-    def pmc_json(self) -> t.Iterator[FullText]:
-        if self._corpus is None:
-            raise ValueError(
-                "Article must be initialized with a non-None Corpus to access pmc_json data."
-            )
-
-        if self.full_text_file not in [
-            "comm_use_subset",
-            "custom_license",
-            "noncomm_use_subset",
-        ]:
-            if self.has_pmc_xml_parse:
-                print(
-                    "Model failure: has_pmc_xml_parse=True but not in expected dataset!!!!"
-                )
-                raise ValueError
-
-            raise ValueError(
-                f"Article must be in comm_use_subset, noncomm_use_subset, or custom_license datasets to access pdf_json data, not {self.full_text_file}"
-            )
-
-        json_pmc_fname = path.join(
-            self._corpus.data_dir,
+    def _json_path(self, kind: _FullTextKind, sha: t.Optional[str] = None) -> str:
+        return path.join(
+            t.cast("Corpus", self._corpus).data_dir,
             self.full_text_file,
             self.full_text_file,
-            "pmc_json",
-            f"{self.pmcid}.xml.json",
+            kind.dir_name,
+            f"{sha}.json" if kind == _FullTextKind.PDF else f"{self.pmcid}.xml.json",
         )
 
-        if path.exists(json_pmc_fname):
-            with open(json_pmc_fname) as f:
-                yield FullText.from_json(json.load(f))
+    def pdf_json(self) -> t.Iterator[FullText]:
+        self._json_preconditions(_FullTextKind.PDF)
+        for sha in self.sha:
+            fulltext = _maybe_load_article(
+                self._json_path(kind=_FullTextKind.PDF, sha=sha)
+            )
+            if fulltext is not None:
+                yield fulltext
+
+    def pmc_json(self) -> t.Iterator[FullText]:
+        self._json_preconditions(_FullTextKind.PMC)
+        fulltext = _maybe_load_article(self._json_path(kind=_FullTextKind.PMC))
+        if fulltext is not None:
+            yield fulltext
 
     @classmethod
     def from_row(
@@ -211,6 +216,8 @@ class Corpus:
 
     @cached_property
     def articles(self) -> t.List[Article]:
+        """Get a list of article metadata.
+        """
         return list(self._read_articles())
 
     def _read_embeddings(self) -> t.Iterator[t.Tuple[UID, t.List[float]]]:
@@ -225,4 +232,9 @@ class Corpus:
                 yield UID(row[0]), [float(value) for value in row[1:]]
 
     def embeddings(self) -> t.Dict[UID, t.List[float]]:
-        return {uid: vector for uid, vector in self._read_embeddings()}
+        """Get embedding data from the ``cord_19_embeddings_4_17`` directory.
+
+        Warning: This function will load a ~1GB ``dict`` into memory.
+        Use with caution.
+        """
+        return dict(self._read_embeddings())
