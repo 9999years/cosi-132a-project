@@ -20,6 +20,10 @@ from .util import optional
 _DATETIME_2020 = datetime(2020, 1, 1)
 
 
+def _parse_bool(value: str) -> bool:
+    return {"True": True, "False": False}[value]
+
+
 def _parse_date(date: str) -> t.Optional[datetime]:
     """Parse a value in the corpus publish_time column.
 
@@ -28,8 +32,6 @@ def _parse_date(date: str) -> t.Optional[datetime]:
     >>> _parse_date('2003-04-28')
     datetime.datetime(2003, 4, 28, 0, 0)
     """
-    if not date:
-        return None
     if date == "2020":
         return _DATETIME_2020
     try:
@@ -38,14 +40,12 @@ def _parse_date(date: str) -> t.Optional[datetime]:
         return datetime.strptime(date, "%Y")
 
 
-def _parse_authors(authors: t.Optional[str]) -> t.List[str]:
-    return (
-        [author.strip() for author in authors.split(";")] if authors is not None else []
-    )
+def _parse_authors(authors: str) -> t.List[str]:
+    return [author.strip() for author in authors.split(";")]
 
 
 def _sha(sha: str) -> t.List[str]:
-    return sha.split(";") if sha else []
+    return sha.split(";")
 
 
 def _maybe_load_article(filename: str) -> t.Optional[FullText]:
@@ -87,6 +87,7 @@ class _FullTextKind(enum.Enum):
 UID = t.NewType("UID", str)
 PMCID = t.NewType("PMCID", str)
 PubmedID = t.NewType("PubmedID", int)
+DOI = t.NewType("DOI", str)
 
 ArticleCSV = t.TypedDict(  # pylint: disable=invalid-name
     "ArticleCSV",
@@ -124,7 +125,7 @@ class Article:
     sha: t.List[str]
     source_x: str
     title: str
-    doi: t.Optional[str]
+    doi: t.Optional[DOI]
     pmcid: t.Optional[PMCID]
     pubmed_id: t.Optional[PubmedID]
     license: str
@@ -133,7 +134,7 @@ class Article:
     authors: t.List[str]
     journal: t.Optional[str]
     # Microsoft Academic Paper ID
-    microsoft_id: t.Optional[int]
+    microsoft_id: t.Optional[str]
     # WHO #Covidence
     who_covidence: t.Optional[str]
     has_pdf_parse: bool
@@ -200,17 +201,17 @@ class Article:
         """
         return cls(
             cord_uid=UID(row["cord_uid"]),
-            sha=_sha(row["sha"]),
-            doi=optional(row["doi"]),
+            sha=optional(row["sha"], converter=_sha) or [],
+            doi=optional(row["doi"], converter=DOI),
             pmcid=optional(row["pmcid"], converter=PMCID),
             pubmed_id=optional(row["pubmed_id"], converter=lambda i: PubmedID(int(i))),
-            publish_time=_parse_date(row["publish_time"]),
-            authors=_parse_authors(row["authors"]),
+            publish_time=optional(row["publish_time"], converter=_parse_date),
+            authors=optional(row["authors"], converter=_parse_authors) or [],
             journal=optional(row["journal"]),
-            microsoft_id=optional(row["Microsoft Academic Paper ID"], converter=int),
+            microsoft_id=optional(row["Microsoft Academic Paper ID"]),
             who_covidence=optional(row["WHO #Covidence"]),
-            has_pdf_parse=row["has_pdf_parse"] == "True",
-            has_pmc_xml_parse=row["has_pmc_xml_parse"] == "True",
+            has_pdf_parse=_parse_bool(row["has_pdf_parse"]),
+            has_pmc_xml_parse=_parse_bool(row["has_pmc_xml_parse"]),
             full_text_file=row["full_text_file"],
             url=row["url"],
             source_x=row["source_x"],
@@ -232,7 +233,7 @@ _REQUIRED_DATA_DIR_FILES = {
 
 
 def _validate_data_dir(
-    instance: "Corpus", attribute: attr.Attribute[str], data_dir: str
+    instance: "Corpus", attribute: "attr.Attribute[str]", data_dir: str
 ) -> None:
     """Ensure that a given ``data_dir`` likely contains an unzipped CORD-19 corpus.
 
@@ -241,7 +242,9 @@ def _validate_data_dir(
     """
     if missing_files := _REQUIRED_DATA_DIR_FILES - set(os.listdir(data_dir)):
         raise ValueError(
-            f"The following files/directories were expected in {data_dir} but not found:"
+            "The following files/directories were expected in "
+            + path.realpath(data_dir)
+            + " but not found: "
             + ", ".join(missing_files)
         )
 
