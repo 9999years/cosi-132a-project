@@ -1,5 +1,5 @@
 [BASIC]
-good-names=i,j,k,ex,Run,_,T,f
+good-names=i,j,k,ex,Run,_,T,f,R
 
 [MESSAGES CONTROL]
 disable=bad-continuation,
@@ -11,3 +11,6 @@ enable=c-extension-no-member
 
 [FORMAT]
 ignore-long-lines=https?://
+
+[DESIGN]
+min-public-methods=1

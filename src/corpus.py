@@ -6,6 +6,7 @@ This module expects to find the corpus in ``../data/``, where it should contain
 import csv
 import typing as t
 from datetime import datetime
+import os
 from os import path
 import json
 import enum
@@ -13,7 +14,8 @@ import enum
 import attr
 from cached_property import cached_property
 
-from .pdf_json import FullText
+from .pdf_json import FullText, JSONFullText
+from .util import optional
 
 _DATETIME_2020 = datetime(2020, 1, 1)
 
@@ -42,36 +44,6 @@ def _parse_authors(authors: t.Optional[str]) -> t.List[str]:
     )
 
 
-T = t.TypeVar("T")
-
-
-@t.overload
-def _optional(value: str) -> t.Optional[str]:
-    ...
-
-
-@t.overload
-def _optional(
-    value: str, converter: t.Optional[t.Callable[[str], T]] = None
-) -> t.Optional[T]:
-    ...
-
-
-def _optional(value, converter=None):  # type: ignore
-    """Convert a CSV field to a value.
-
-    Returns ``None`` for empty strings.
-
-    >>> _optional('')
-    >>> _optional('', converter=int)
-    >>> _optional('123')
-    '123'
-    >>> _optional('123', converter=int)
-    123
-    """
-    return None if not value else (value if converter is None else converter(value))
-
-
 def _sha(sha: str) -> t.List[str]:
     return sha.split(";") if sha else []
 
@@ -79,7 +51,7 @@ def _sha(sha: str) -> t.List[str]:
 def _maybe_load_article(filename: str) -> t.Optional[FullText]:
     if path.exists(filename):
         with open(filename) as f:
-            return FullText.from_json(json.load(f))
+            return FullText.from_json(t.cast(JSONFullText, json.load(f)))
     return None
 
 
@@ -116,9 +88,38 @@ UID = t.NewType("UID", str)
 PMCID = t.NewType("PMCID", str)
 PubmedID = t.NewType("PubmedID", int)
 
+ArticleCSV = t.TypedDict(  # pylint: disable=invalid-name
+    "ArticleCSV",
+    {
+        "cord_uid": str,
+        "sha": str,
+        "source_x": str,
+        "title": str,
+        "doi": str,
+        "pmcid": str,
+        "pubmed_id": str,
+        "license": str,
+        "abstract": str,
+        "publish_time": str,
+        "authors": str,
+        "journal": str,
+        "Microsoft Academic Paper ID": str,
+        "WHO #Covidence": str,
+        "has_pdf_parse": str,
+        "has_pmc_xml_parse": str,
+        "full_text_file": str,
+        "url": str,
+    },
+)
+
 
 @attr.s(auto_attribs=True)
 class Article:
+    """Article metadata from the corpus.
+
+    Parsed from one row of the ``data/metadata.csv`` file.
+    """
+
     cord_uid: UID
     sha: t.List[str]
     source_x: str
@@ -145,12 +146,16 @@ class Article:
     def _json_preconditions(self, kind: _FullTextKind) -> None:
         if self._corpus is None:
             raise ValueError(
-                f"Article must be initialized with a non-None Corpus to access {kind.dir_name} data."
+                "Article must be initialized with a non-None Corpus to access"
+                + kind.dir_name
+                + "data."
             )
 
         if self.full_text_file not in kind.full_text_file_values:
             raise ValueError(
-                f"Article must be in one of {', '.join(kind.full_text_file_values)} datasets to access {kind.dir_name} data, not {self.full_text_file}"
+                "Article must be in one of"
+                + ", ".join(kind.full_text_file_values)
+                + f"datasets to access {kind.dir_name} data, not {self.full_text_file}"
             )
 
     def _json_path(self, kind: _FullTextKind, sha: t.Optional[str] = None) -> str:
@@ -163,6 +168,12 @@ class Article:
         )
 
     def pdf_json(self) -> t.Iterator[FullText]:
+        """Iterate over full-text PDF parses for this article.
+
+        Some articles have their full-text parsed from a PDF into a JSON format
+        *loosely* described by ``data/json_schema.txt``. This function
+        iterates over available articles, providing ``FullText`` instances.
+        """
         self._json_preconditions(_FullTextKind.PDF)
         for sha in self.sha:
             fulltext = _maybe_load_article(
@@ -172,6 +183,10 @@ class Article:
                 yield fulltext
 
     def pmc_json(self) -> t.Iterator[FullText]:
+        """Iterate over full-text PDF parses for this article from PMC data.
+
+        Similar to the ``pdf_json`` method, but for ``pmc_json`` data.
+        """
         self._json_preconditions(_FullTextKind.PMC)
         fulltext = _maybe_load_article(self._json_path(kind=_FullTextKind.PMC))
         if fulltext is not None:
@@ -179,19 +194,21 @@ class Article:
 
     @classmethod
     def from_row(
-        cls, row: t.Dict[str, str], corpus: t.Optional["Corpus"] = None
+        cls, row: ArticleCSV, corpus: t.Optional["Corpus"] = None
     ) -> "Article":
+        """Construct an Article from a CSV row produced by a ``csv.DictReader``.
+        """
         return cls(
             cord_uid=UID(row["cord_uid"]),
             sha=_sha(row["sha"]),
-            doi=_optional(row["doi"]),
-            pmcid=_optional(row["pmcid"], converter=PMCID),
-            pubmed_id=_optional(row["pubmed_id"], converter=lambda i: PubmedID(int(i))),
+            doi=optional(row["doi"]),
+            pmcid=optional(row["pmcid"], converter=PMCID),
+            pubmed_id=optional(row["pubmed_id"], converter=lambda i: PubmedID(int(i))),
             publish_time=_parse_date(row["publish_time"]),
             authors=_parse_authors(row["authors"]),
-            journal=_optional(row["journal"]),
-            microsoft_id=_optional(row["Microsoft Academic Paper ID"], converter=int),
-            who_covidence=_optional(row["WHO #Covidence"]),
+            journal=optional(row["journal"]),
+            microsoft_id=optional(row["Microsoft Academic Paper ID"], converter=int),
+            who_covidence=optional(row["WHO #Covidence"]),
             has_pdf_parse=row["has_pdf_parse"] == "True",
             has_pmc_xml_parse=row["has_pmc_xml_parse"] == "True",
             full_text_file=row["full_text_file"],
@@ -204,15 +221,73 @@ class Article:
         )
 
 
+_REQUIRED_DATA_DIR_FILES = {
+    "custom_license",
+    "comm_use_subset",
+    "biorxiv_medrxiv",
+    "metadata.csv",
+    "cord_19_embeddings_4_17",
+    "noncomm_use_subset",
+}
+
+
+def _validate_data_dir(
+    instance: "Corpus", attribute: attr.Attribute[str], data_dir: str
+) -> None:
+    """Ensure that a given ``data_dir`` likely contains an unzipped CORD-19 corpus.
+
+    Note that this just checks for top-level files and folders, and doesn't
+    confirm the entire directory tree or the data in any of the files.
+    """
+    if missing_files := _REQUIRED_DATA_DIR_FILES - set(os.listdir(data_dir)):
+        raise ValueError(
+            f"The following files/directories were expected in {data_dir} but not found:"
+            + ", ".join(missing_files)
+        )
+
+
 @attr.s(auto_attribs=True)
 class Corpus:
-    data_dir: str = "./data"
+    """Provides access to the CORD-19 dataset.
+
+    Given a ``data_dir`` path to a directory containing the unzipped dataset,
+    ``Corpus`` provides access to articles, full-text parses, and embeddings
+    data.
+
+    See: https://www.kaggle.com/allen-institute-for-ai/CORD-19-research-challenge
+    """
+
+    # This directory should look something like:
+    #
+    # data/
+    # ├── biorxiv_medrxiv/
+    # │   └── biorxiv_medrxiv/
+    # │       └── pdf_json/
+    # ├── comm_use_subset/
+    # │   └── comm_use_subset/
+    # │       ├── pdf_json/
+    # │       └── pmc_json/
+    # ├── cord_19_embeddings_4_17/
+    # │   └── cord_19_embeddings_4_17.csv
+    # ├── COVID.DATA.LIC.AGMT.pdf
+    # ├── custom_license/
+    # │   └── custom_license/
+    # │       ├── pdf_json/
+    # │       └── pmc_json/
+    # ├── json_schema.txt
+    # ├── metadata.csv
+    # ├── metadata.readme
+    # └── noncomm_use_subset/
+    #     └── noncomm_use_subset/
+    #         ├── pdf_json/
+    #         └── pmc_json/
+    data_dir: str = attr.ib(default="./data", validator=_validate_data_dir)
 
     def _read_articles(self) -> t.Iterator[Article]:
         with open(path.join(self.data_dir, "metadata.csv"), newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                yield Article.from_row(row, corpus=self)
+                yield Article.from_row(t.cast(ArticleCSV, row), corpus=self)
 
     @cached_property
     def articles(self) -> t.List[Article]:

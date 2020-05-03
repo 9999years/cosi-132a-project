@@ -25,7 +25,7 @@ lint:
 	pylint test/*.py \
 		--disable=missing-module-docstring \
 		--disable=missing-function-docstring
-	pydocstyle --add-ignore=D200 src/*.py test/*.py
+	pydocstyle --add-ignore=D200 src/*.py
 
 # Run tests (in nix-shell)
 test:
