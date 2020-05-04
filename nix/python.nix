@@ -47,5 +47,41 @@ python.override {
         sha256 = "0c1h9x3a9klvk2g288wl328x8xgzw7136k6vs9hkd56b85vcjh6z";
       };
     };
+
+    # (For pylint.)
+    astroid = super.astroid.overridePythonAttrs rec {
+      pname = "astroid";
+      version = "2.4.0";
+
+      src = super.fetchPypi {
+        inherit pname version;
+        sha256 = "15n1b98gaj8k2qma1clfagyg319njjih5f7w6k402ka0l935vyi9";
+      };
+    };
+
+    # (For pylint.)
+    toml = super.toml.overridePythonAttrs rec {
+      pname = "toml";
+      version = "0.10.0";
+
+      src = super.fetchPypi {
+        inherit pname version;
+        sha256 = "0p1xww2mzkhqvxkfvmfzm58bbfj812zhdz4rwdjiv94ifz2q37r2";
+      };
+    };
+
+    # Use newer pylint
+    pylint = super.pylint.overridePythonAttrs (old: rec {
+      pname = "pylint";
+      version = "2.5.0";
+
+      doCheck = false;
+      propagatedBuildInputs = old.propagatedBuildInputs ++ [ self.toml ];
+
+      src = super.fetchPypi {
+        inherit pname version;
+        sha256 = "0i823qd5wk3jwhm33vkq1qdkxjf1h8fdvdrmii1305ls7x7133jq";
+      };
+    });
   };
 }

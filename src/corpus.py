@@ -3,6 +3,7 @@
 This module expects to find the corpus in ``../data/``, where it should contain
 ``json_schema.txt``, ``metadata.csv``, etc.
 """
+from __future__ import annotations
 import csv
 import typing as t
 from datetime import datetime
@@ -21,15 +22,25 @@ _DATETIME_2020 = datetime(2020, 1, 1)
 
 
 def _parse_bool(value: str) -> bool:
+    """
+    >>> _parse_bool("True")
+    True
+    >>> _parse_bool("False")
+    False
+    >>> _parse_bool("")
+    Traceback (most recent call last):
+        ...
+    KeyError: ''
+    """
     return {"True": True, "False": False}[value]
 
 
 def _parse_date(date: str) -> t.Optional[datetime]:
     """Parse a value in the corpus publish_time column.
 
-    >>> _parse_date('2020')
+    >>> _parse_date("2020")
     datetime.datetime(2020, 1, 1, 0, 0)
-    >>> _parse_date('2003-04-28')
+    >>> _parse_date("2003-04-28")
     datetime.datetime(2003, 4, 28, 0, 0)
     """
     if date == "2020":
@@ -194,9 +205,7 @@ class Article:
             yield fulltext
 
     @classmethod
-    def from_row(
-        cls, row: ArticleCSV, corpus: t.Optional["Corpus"] = None
-    ) -> "Article":
+    def from_row(cls, row: ArticleCSV, corpus: t.Optional[Corpus] = None) -> Article:
         """Construct an Article from a CSV row produced by a ``csv.DictReader``.
         """
         return cls(
@@ -233,7 +242,7 @@ _REQUIRED_DATA_DIR_FILES = {
 
 
 def _validate_data_dir(
-    instance: "Corpus", attribute: "attr.Attribute[str]", data_dir: str
+    _instance: Corpus, _attribute: attr.Attribute[str], data_dir: str
 ) -> None:
     """Ensure that a given ``data_dir`` likely contains an unzipped CORD-19 corpus.
 
@@ -286,8 +295,11 @@ class Corpus:
     #         └── pmc_json/
     data_dir: str = attr.ib(default="./data", validator=_validate_data_dir)
 
+    def _data_path(self, *components: str) -> str:
+        return path.join(self.data_dir, *components)
+
     def _read_articles(self) -> t.Iterator[Article]:
-        with open(path.join(self.data_dir, "metadata.csv"), newline="") as f:
+        with open(self._data_path("metadata.csv"), newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 yield Article.from_row(t.cast(ArticleCSV, row), corpus=self)
@@ -298,21 +310,29 @@ class Corpus:
         """
         return list(self._read_articles())
 
-    def _read_embeddings(self) -> t.Iterator[t.Tuple[UID, t.List[float]]]:
+    @property
+    def embeddings(self) -> t.Iterator[t.Tuple[UID, t.List[float]]]:
+        """Iterator over embedding data from the ``cord_19_embeddings_4_17``
+        directory.
+
+        If a full dict is needed, use the ``embeddings_dict`` method, but note
+        that the resulting object will be ~1GB.
+
+        >>> len(next(filter(lambda t: t[0] == "yy96yeu9", Corpus().embeddings))[1])
+        768
+        """
         with open(
-            path.join(
-                self.data_dir, "cord_19_embeddings_4_17", "cord_19_embeddings_4_17.csv"
-            ),
+            self._data_path("cord_19_embeddings_4_17", "cord_19_embeddings_4_17.csv"),
             newline="",
         ) as f:
             reader = csv.reader(f)
             for row in reader:
                 yield UID(row[0]), [float(value) for value in row[1:]]
 
-    def embeddings(self) -> t.Dict[UID, t.List[float]]:
+    def embeddings_dict(self) -> t.Dict[UID, t.List[float]]:
         """Get embedding data from the ``cord_19_embeddings_4_17`` directory.
 
         Warning: This function will load a ~1GB ``dict`` into memory.
         Use with caution.
         """
-        return dict(self._read_embeddings())
+        return dict(self.embeddings)

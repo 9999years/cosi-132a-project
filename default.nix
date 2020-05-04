@@ -5,7 +5,7 @@ let
   pypkgs = py.pkgs;
 
   # Development dependencies, for linting etc.
-  devDeps = with pypkgs; [
+  devDeps = (with pypkgs; [
     mypy # type checking
     black # code formatting
     pylint # general linting
@@ -15,7 +15,7 @@ let
     # rope # ???
     pydocstyle # docstring style
     coverage # unit test coverage
-  ];
+  ]) ++ [ (import ./nix/doctestmod.nix pkgs) ];
 
   project = { dev ? false, }:
     stdenv.mkDerivation {

@@ -27,10 +27,14 @@ lint:
 		--disable=missing-function-docstring
 	pydocstyle --add-ignore=D200 src/*.py
 
+# Run doctests (in nix-shell)
+doctest:
+	find src -name '*.py' -print0 | xargs -0 -n 1 doctestmod
+
 # Run tests (in nix-shell)
 test:
 	pytest
-	python3.8 -m doctest src/*.py
+	just doctest
 
 # Run tests with code coverage (in nix-shell)
 coverage:

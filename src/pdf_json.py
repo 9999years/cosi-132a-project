@@ -1,5 +1,6 @@
 """Classes for PDF-JSON data.
 """
+from __future__ import annotations
 import typing as t
 
 import attr
@@ -42,7 +43,7 @@ class Location:
     country: t.Optional[str]
 
     @classmethod
-    def from_json(cls, data: JSONLocation) -> "Location":
+    def from_json(cls, data: JSONLocation) -> Location:
         """Construct a Location instance from a JSON dict.
         """
         return cls(
@@ -76,7 +77,7 @@ class Affiliation:
     location: t.Optional[Location]
 
     @classmethod
-    def from_json(cls, data: JSONAffiliation) -> "Affiliation":
+    def from_json(cls, data: JSONAffiliation) -> Affiliation:
         """Construct an Affiliation instance from a JSON dict.
         """
         return cls(
@@ -121,7 +122,7 @@ class Author:
     email: t.Optional[str]
 
     @classmethod
-    def from_json(cls, data: JSONAuthor) -> "Author":
+    def from_json(cls, data: JSONAuthor) -> Author:
         """Construct an Author instance from a JSON dict.
         """
         return cls(
@@ -168,7 +169,7 @@ class CiteSpan:
     ref_id: RefID
 
     @classmethod
-    def from_json(cls, data: JSONCiteSpan) -> "CiteSpan":
+    def from_json(cls, data: JSONCiteSpan) -> CiteSpan:
         """Construct a CiteSpan instance from a JSON dict.
         """
         return cls(
@@ -210,7 +211,7 @@ class RefSpan:
     ref_id: t.Optional[RefID]
 
     @classmethod
-    def from_json(cls, data: JSONRefSpan) -> "RefSpan":
+    def from_json(cls, data: JSONRefSpan) -> RefSpan:
         """Construct a RefSpan instance from a JSON dict.
         """
         return cls(
@@ -256,10 +257,9 @@ class BibEntry:
     other_ids: t.Dict[str, str]
 
     @classmethod
-    def from_json(cls, data: JSONBibEntry) -> "BibEntry":
+    def from_json(cls, data: JSONBibEntry) -> BibEntry:
         """Construct a BibEntry instance from a JSON dict.
         """
-        print(data["other_ids"])
         return cls(
             ref_id=RefID(data["ref_id"]),
             title=data["title"],
@@ -269,7 +269,9 @@ class BibEntry:
             volume=data["volume"],
             issn=data["issn"],
             pages=data["pages"],
-            other_ids=data["other_ids"],
+            other_ids=ids  # pylint: disable=used-before-assignment
+            if (ids := data["other_ids"]) != {"DOI": []}
+            else {},
         )
 
 
@@ -303,7 +305,7 @@ class RefEntry:
     latex: t.Optional[str]
 
     @classmethod
-    def from_json(cls, data: JSONRefEntry) -> "RefEntry":
+    def from_json(cls, data: JSONRefEntry) -> RefEntry:
         """Construct a RefEntry instance from a JSON dict.
         """
         return cls(
@@ -349,7 +351,7 @@ class Paragraph:
     eq_spans: t.List[CiteSpan]
 
     @classmethod
-    def from_json(cls, data: JSONParagraph) -> "Paragraph":
+    def from_json(cls, data: JSONParagraph) -> Paragraph:
         """Construct a Paragraph instance from a JSON dict.
         """
         return cls(
@@ -386,7 +388,7 @@ class Metadata:
     authors: t.List[Author]
 
     @classmethod
-    def from_json(cls, data: JSONMetadata) -> "Metadata":
+    def from_json(cls, data: JSONMetadata) -> Metadata:
         """Construct a Metadata instance from a JSON dict.
         """
         return cls(
@@ -427,7 +429,7 @@ class FullText:
     back_matter: t.List[Paragraph]
 
     @classmethod
-    def from_json(cls, data: JSONFullText) -> "FullText":
+    def from_json(cls, data: JSONFullText) -> FullText:
         """Construct a FullText instance from a JSON dict.
         """
         return cls(
