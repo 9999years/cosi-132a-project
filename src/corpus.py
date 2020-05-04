@@ -52,11 +52,28 @@ def _parse_date(date: str) -> t.Optional[datetime]:
 
 
 def _parse_authors(authors: str) -> t.List[str]:
+    """
+    >>> _parse_authors("Pasternak, Alexander O.; van den Born, Erwin; Spaan, Willy J.M.")
+    ['Pasternak, Alexander O.', 'van den Born, Erwin', 'Spaan, Willy J.M.']
+    >>> _parse_authors("Disotell, Todd R")
+    ['Disotell, Todd R']
+    """
     return [author.strip() for author in authors.split(";")]
 
 
-def _sha(sha: str) -> t.List[str]:
-    return sha.split(";")
+def _sha(shas: str) -> t.List[str]:
+    """
+    >>> _sha("dab2d95da5307c840eb4a1e00f0186022541d63d")
+    ['dab2d95da5307c840eb4a1e00f0186022541d63d']
+    >>> _sha("e9c78584c08ba79d735e150eff98297eb57f12dd; "
+    ...      "cdb29ec7a9029d22f6fbf7ee04543819591acdc2; "
+    ...      "4a228865af2c19adf9386a5b04cca3ceb3c8683d")
+    ... # doctest: +NORMALIZE_WHITESPACE
+    ['e9c78584c08ba79d735e150eff98297eb57f12dd',
+     'cdb29ec7a9029d22f6fbf7ee04543819591acdc2',
+     '4a228865af2c19adf9386a5b04cca3ceb3c8683d']
+    """
+    return [sha.strip() for sha in shas.split(";")]
 
 
 def _maybe_load_article(filename: str) -> t.Optional[FullText]:
@@ -298,17 +315,51 @@ class Corpus:
     def _data_path(self, *components: str) -> str:
         return path.join(self.data_dir, *components)
 
-    def _read_articles(self) -> t.Iterator[Article]:
+    def _read_articles(self) -> t.Iterator[ArticleCSV]:
         with open(self._data_path("metadata.csv"), newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                yield Article.from_row(t.cast(ArticleCSV, row), corpus=self)
+                yield t.cast(ArticleCSV, row)
+
+    def _articles(self) -> t.Iterator[Article]:
+        for article in self._read_articles():
+            yield Article.from_row(article, corpus=self)
 
     @cached_property
     def articles(self) -> t.List[Article]:
         """Get a list of article metadata.
         """
-        return list(self._read_articles())
+        return list(self._articles())
+
+    def article_from_uid(self, uid: UID) -> Article:
+        """Get the Article with a given cord_uid.
+
+        >>> Corpus().article_from_uid("yy96yeu9")
+        ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+        Article(cord_uid='yy96yeu9',
+                sha=['c63c4d58d170136b8d3b5a66424b5ac3f73a92d9'],
+                source_x='PMC',
+                title='Viral Discovery and Sequence Recovery Using DNA Microarrays',
+                doi='10.1371/journal.pbio.0000002',
+                pmcid='PMC261870',
+                pubmed_id=14624234,
+                license='cc-by',
+                abstract='Because of the constant ... emerging infectious disease.',
+                publish_time=datetime.datetime(2003, 11, 17, 0, 0),
+                authors=['Wang, David', ..., 'DeRisi, Joseph L'],
+                journal='PLoS Biol',
+                microsoft_id=None,
+                who_covidence=None,
+                has_pdf_parse=True,
+                has_pmc_xml_parse=True,
+                full_text_file='comm_use_subset',
+                url='https://www.ncbi.nlm.nih.gov/pmc/articles/PMC261870/',
+                ...)
+        """
+        for article in self._articles():
+            if article.cord_uid == uid:
+                return article
+        raise KeyError(f"No article with cord_uid {uid} found.")
 
     @property
     def embeddings(self) -> t.Iterator[t.Tuple[UID, t.List[float]]]:
@@ -318,7 +369,19 @@ class Corpus:
         If a full dict is needed, use the ``embeddings_dict`` method, but note
         that the resulting object will be ~1GB.
 
-        >>> len(next(filter(lambda t: t[0] == "yy96yeu9", Corpus().embeddings))[1])
+        >>> def find_by_uid(uid: UID):
+        ...     def ret(item: t.Tuple[UID, t.List[float]]) -> bool:
+        ...         return item[0] == uid
+        ...     return ret
+        >>> uid, vector = next(filter(find_by_uid("yy96yeu9"), Corpus().embeddings))
+        >>> uid
+        'yy96yeu9'
+        >>> vector
+        ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+        [-2.3836090564727783, -4.649903774261475, -1.5138229131698608,
+         ...,
+         2.5869600772857666, -1.1826152801513672, -0.024099022150039673]
+        >>> len(vector)
         768
         """
         with open(
