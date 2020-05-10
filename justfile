@@ -2,6 +2,10 @@
 data:
 	nix-build -A data -o data
 
+# Downloads and extracts the Stanford Named Entity Recognizer.
+stanford-ner:
+	nix-build -A stanford-ner -o stanford-ner
+
 # Launch a nix-shell for development
 shell:
 	nix-shell

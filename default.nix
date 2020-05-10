@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> { }, }:
 let
-  inherit (pkgs) stdenv lib python38;
+  inherit (pkgs) stdenv lib fetchurl fetchzip python38;
   py = import nix/python.nix { python = python38; };
   pypkgs = py.pkgs;
 
@@ -16,6 +16,14 @@ let
     pydocstyle # docstring style
     coverage # unit test coverage
   ]) ++ [ (import ./nix/doctestmod.nix pkgs) ];
+
+  stanford-ner = fetchzip {
+    url = "https://nlp.stanford.edu/software/stanford-ner-2018-10-16.zip";
+    sha256 = "08b2jm7lx6rpg4a736z235m9fcg7y9qb748cai5hicla138r7r49";
+    extraPostFetch = ''
+      chmod go-w $out
+    '';
+  };
 
   project = { dev ? false, }:
     stdenv.mkDerivation {
@@ -34,23 +42,31 @@ let
           attrs
           cached-property
         ] ++ (if dev then devDeps else [ ]);
+
+      shellHook = ''
+        export STANFORD_MODELS="${stanford-ner}/classifiers";
+      '';
     };
 
   name = "ir-final";
+
+  mkUnzip = { src, name, ... }@attrs:
+    stdenv.mkDerivation ({
+      buildInputs = with pkgs; [ unzip ];
+      phases = [ "installPhase" ];
+      installPhase = ''
+        mkdir $out
+        unzip $src -d $out
+      '';
+    } // attrs);
+
 in {
-  data = stdenv.mkDerivation {
+  data = mkUnzip {
     name = "${name}-data";
-    buildInputs = with pkgs; [ unzip ];
     src = ./raw_data/CORD-19-research-challenge.zip;
-    dontUnpack = true;
-    dontConfigure = true;
-    dontBuild = true;
-    installPhase = ''
-      mkdir $out
-      unzip $src -d $out
-    '';
-    dontFixup = true;
   };
+
+  inherit stanford-ner;
 
   shell = project { dev = true; };
 }

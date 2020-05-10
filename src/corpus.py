@@ -16,7 +16,7 @@ import attr
 from cached_property import cached_property
 
 from .pdf_json import FullText, JSONFullText
-from .util import optional
+from .util import optional, REPO_ROOT
 
 _DATETIME_2020 = datetime(2020, 1, 1)
 
@@ -316,7 +316,9 @@ class Corpus:
     #     └── noncomm_use_subset/
     #         ├── pdf_json/
     #         └── pmc_json/
-    data_dir: str = attr.ib(default="./data", validator=_validate_data_dir)
+    data_dir: str = attr.ib(
+        default=path.join(REPO_ROOT, "data"), validator=_validate_data_dir
+    )
 
     def _data_path(self, *components: str) -> str:
         return path.join(self.data_dir, *components)

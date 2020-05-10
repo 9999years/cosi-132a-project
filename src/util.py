@@ -1,9 +1,13 @@
 """Utility functions and classes.
 """
 import typing as t
+from os import path
 
 T = t.TypeVar("T")
 R = t.TypeVar("R")
+
+SRC_DIR = path.realpath(path.dirname(__name__))
+REPO_ROOT = path.dirname(SRC_DIR)
 
 
 @t.overload
