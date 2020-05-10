@@ -266,6 +266,12 @@ def _validate_data_dir(
     Note that this just checks for top-level files and folders, and doesn't
     confirm the entire directory tree or the data in any of the files.
     """
+    if not path.exists(data_dir):
+        raise ValueError(
+            f"Expected to find a data directory at {data_dir} containing at "
+            + f"least the files/directories {_REQUIRED_DATA_DIR_FILES}, "
+            + "but the directory doesn't appear to exist."
+        )
     if missing_files := _REQUIRED_DATA_DIR_FILES - set(os.listdir(data_dir)):
         raise ValueError(
             "The following files/directories were expected in "

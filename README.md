@@ -1,5 +1,7 @@
 # Information retrieval final project
 
+Working with the [COVID-19 Open Research Dataset Challenge][CORD-19] corpus.
+
 ## Design
 
 ### Getting started
@@ -41,3 +43,5 @@
            (there's some more d3 code online we can 'borrow' for this)
 
 3. Do all this again with some other attribute that isn't location
+
+[CORD-19]: https://www.kaggle.com/allen-institute-for-ai/CORD-19-research-challenge
