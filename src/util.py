@@ -2,12 +2,31 @@
 """
 import typing as t
 from os import path
+from enum import Enum, auto
+
+import nltk
 
 T = t.TypeVar("T")
 R = t.TypeVar("R")
 
 SRC_DIR = path.realpath(path.dirname(__name__))
 REPO_ROOT = path.dirname(SRC_DIR)
+
+
+def path_from_src(*paths: str) -> str:
+    """Construct an absolute path relative to the src directory.
+
+    See os.path.join for more information.
+    """
+    return path.join(SRC_DIR, *paths)
+
+
+def path_from_repo(*paths: str) -> str:
+    """Construct an absolute path relative to the repository root.
+
+    See os.path.join for more information.
+    """
+    return path.join(REPO_ROOT, *paths)
 
 
 @t.overload
@@ -41,3 +60,24 @@ def optional(value, converter=None):  # type: ignore
     if value:
         return value if converter is None else converter(value)
     return None
+
+
+class NLTKData(Enum):
+    """Bool-like enum indicating if NLTK data was downloaded.
+
+    Used by `ensure_nltk_data()`.
+    """
+
+    AlreadyPresent = auto()
+    Downloaded = auto()
+
+
+def ensure_nltk_data() -> NLTKData:
+    """Ensure NLTK data is downloaded.
+     """
+    try:
+        nltk.data.load("tokenizers/punkt/PY3/english.pickle")
+        return NLTKData.AlreadyPresent
+    except LookupError:
+        nltk.download("punkt")
+        return NLTKData.Downloaded

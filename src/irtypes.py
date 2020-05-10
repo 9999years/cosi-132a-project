@@ -10,3 +10,7 @@ import typing as t
 # https://github.com/python/typing/issues/182
 JSONValue = t.Union[None, bool, int, float, str, t.List[t.Any], t.Dict[str, t.Any]]
 JSON = t.Dict[str, t.Any]
+
+Token = t.NewType("Token", str)
+LocationName = t.NewType("LocationName", str)
+

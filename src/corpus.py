@@ -14,9 +14,10 @@ import enum
 
 import attr
 from cached_property import cached_property
+from nltk.tag import StanfordNERTagger, StanfordTagger
 
 from .pdf_json import FullText, JSONFullText
-from .util import optional, REPO_ROOT
+from .util import optional, path_from_repo
 
 _DATETIME_2020 = datetime(2020, 1, 1)
 
@@ -281,6 +282,37 @@ def _validate_data_dir(
         )
 
 
+_REQUIRED_STANFORD_NER_DIR_FILES = {
+    "classifiers",
+    "stanford-ner.jar",
+}
+
+
+def _validate_stanford_ner_dir(
+    _instance: Corpus, _attribute: attr.Attribute[str], stanford_ner_dir: str
+) -> None:
+    """Ensure that a given path likely contains the unzipped Stanford NER data.
+
+    Note that this just checks for top-level files and folders, and doesn't
+    confirm the entire directory tree or the data in any of the files.
+    """
+    if not path.exists(stanford_ner_dir):
+        raise ValueError(
+            f"Expected to find a data directory at {stanford_ner_dir} containing at "
+            + f"least the files/directories {_REQUIRED_STANFORD_NER_DIR_FILES}, "
+            + "but the directory doesn't appear to exist."
+        )
+    if missing_files := _REQUIRED_STANFORD_NER_DIR_FILES - set(
+        os.listdir(stanford_ner_dir)
+    ):
+        raise ValueError(
+            "The following files/directories were expected in "
+            + path.realpath(stanford_ner_dir)
+            + " but not found: "
+            + ", ".join(missing_files)
+        )
+
+
 @attr.s(auto_attribs=True)
 class Corpus:
     """Provides access to the CORD-19 dataset.
@@ -317,11 +349,22 @@ class Corpus:
     #         ├── pdf_json/
     #         └── pmc_json/
     data_dir: str = attr.ib(
-        default=path.join(REPO_ROOT, "data"), validator=_validate_data_dir
+        default=path_from_repo("data"), validator=_validate_data_dir,
+    )
+
+    stanford_ner_dir: str = attr.ib(
+        default=path_from_repo("stanford-ner"), validator=_validate_stanford_ner_dir,
     )
 
     def _data_path(self, *components: str) -> str:
         return path.join(self.data_dir, *components)
+
+    @cached_property
+    def _location_tagger(self) -> StanfordTagger:
+        return StanfordNERTagger(
+            "english.all.3class.distsim.crf.ser.gz",
+            path_to_jar=path.join(self.stanford_ner_dir, "stanford-ner.jar"),
+        )
 
     def _read_articles(self) -> t.Iterator[ArticleCSV]:
         with open(self._data_path("metadata.csv"), newline="") as f:
