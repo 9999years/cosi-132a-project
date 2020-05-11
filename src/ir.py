@@ -18,6 +18,14 @@ def words(text: str) -> t.List[Token]:
     return t.cast(t.List[Token], nltk.tokenize.word_tokenize(text))
 
 
+_LOCATION_FALSE_POSITIVES = [
+    "Meulenberg",
+    "RCNMV",
+    "Ou",
+    "E.coli",
+]
+
+
 def locations(toks: t.List[Token], tagger: StanfordTagger) -> t.List[LocationName]:
     """Extract locations from a list of tokens.
 
@@ -26,6 +34,6 @@ def locations(toks: t.List[Token], tagger: StanfordTagger) -> t.List[LocationNam
     return [
         LocationName(loc)
         for loc, tok_type in tagger.tag(toks)
-        if tok_type == "LOCATION"
+        if tok_type == "LOCATION" and loc not in _LOCATION_FALSE_POSITIVES
     ]
 

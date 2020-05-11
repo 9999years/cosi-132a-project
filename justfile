@@ -1,3 +1,7 @@
+# Run the program (in nix-shell)
+run:
+	python3.8 -m src
+
 # Generate the `data` dir from the `raw_data` dir.
 data:
 	nix-build -A data -o data

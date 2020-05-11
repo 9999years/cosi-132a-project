@@ -9,7 +9,7 @@ import nltk
 T = t.TypeVar("T")
 R = t.TypeVar("R")
 
-SRC_DIR = path.realpath(path.dirname(__name__))
+SRC_DIR = path.realpath(path.dirname(__file__))
 REPO_ROOT = path.dirname(SRC_DIR)
 
 

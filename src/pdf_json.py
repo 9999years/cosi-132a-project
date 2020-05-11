@@ -2,6 +2,7 @@
 """
 from __future__ import annotations
 import typing as t
+from itertools import chain
 
 import attr
 
@@ -137,7 +138,17 @@ class Author:
         )
 
 
-class JSONCiteSpan(t.TypedDict):
+class _JSONCiteSpan(t.TypedDict, total=False):
+    """Schema for JSON-decoded CiteSpan (non-required attributes).
+
+    Used to transform a JSON dict into a CiteSpan instance.
+    """
+
+    text: str
+    mention: str
+
+
+class JSONCiteSpan(_JSONCiteSpan):
     """Schema for JSON-decoded CiteSpan.
 
     Used to transform a JSON dict into a CiteSpan instance.
@@ -145,7 +156,6 @@ class JSONCiteSpan(t.TypedDict):
 
     start: int
     end: int
-    text: str
     ref_id: str
 
 
@@ -175,12 +185,22 @@ class CiteSpan:
         return cls(
             start=data["start"],
             end=data["end"],
-            text=data["text"],
+            text=data["text"] if "text" in data else data["mention"],
             ref_id=RefID(data["ref_id"]),
         )
 
 
-class JSONRefSpan(t.TypedDict):
+class _JSONRefSpan(t.TypedDict, total=False):
+    """Schema for JSON-decoded RefSpan (non-required attributes).
+
+    Used to transform a JSON dict into a RefSpan instance.
+    """
+
+    text: str
+    mention: str
+
+
+class JSONRefSpan(_JSONRefSpan):
     """Schema for JSON-decoded RefSpan.
 
     Used to transform a JSON dict into a RefSpan instance.
@@ -188,7 +208,6 @@ class JSONRefSpan(t.TypedDict):
 
     start: int
     end: int
-    text: str
     ref_id: str
 
 
@@ -217,18 +236,26 @@ class RefSpan:
         return cls(
             start=data["start"],
             end=data["end"],
-            text=data["text"],
+            text=data["text"] if "text" in data else data["mention"],
             ref_id=optional(data["ref_id"], RefID),
         )
 
 
-class JSONBibEntry(t.TypedDict):
-    """Schema for JSON-decoded BibEntry.
+class _JSONBibEntry(t.TypedDict, total=False):
+    """Schema for JSON-decoded BibEntry (non-required attributes).
 
     Used to transform a JSON dict into a BibEntry instance.
     """
 
     ref_id: str
+
+
+class JSONBibEntry(_JSONBibEntry):
+    """Schema for JSON-decoded BibEntry.
+
+    Used to transform a JSON dict into a BibEntry instance.
+    """
+
     title: str
     authors: t.List[JSONAuthor]
     year: int
@@ -246,7 +273,7 @@ class BibEntry:
     ``ref_id`` is a paper-unique key referred to by the ``CiteSpan`` class.
     """
 
-    ref_id: RefID
+    ref_id: t.Optional[RefID]
     title: str
     authors: t.List[Author]
     year: int
@@ -261,7 +288,7 @@ class BibEntry:
         """Construct a BibEntry instance from a JSON dict.
         """
         return cls(
-            ref_id=RefID(data["ref_id"]),
+            ref_id=optional(data.get("ref_id"), RefID),
             title=data["title"],
             authors=[Author.from_json(author) for author in data["authors"]],
             year=data["year"],
@@ -428,6 +455,14 @@ class FullText:
     ref_entries: t.Dict[RefID, RefEntry]
     back_matter: t.List[Paragraph]
 
+    def paragraphs(self) -> t.Iterator[Paragraph]:
+        """Iterator over the paragraphs of this article.
+
+        Includes the abstract, body text, and back-matter; use the
+        Paragraph.section attribute to differentiate.
+        """
+        return chain(self.abstract, self.body_text, self.back_matter)
+
     @classmethod
     def from_json(cls, data: JSONFullText) -> FullText:
         """Construct a FullText instance from a JSON dict.
@@ -435,7 +470,9 @@ class FullText:
         return cls(
             paper_id=data["paper_id"],
             metadata=Metadata.from_json(data["metadata"]),
-            abstract=[Paragraph.from_json(paragraph) for paragraph in data["abstract"]],
+            abstract=[
+                Paragraph.from_json(paragraph) for paragraph in data.get("abstract", [])
+            ],
             body_text=[
                 Paragraph.from_json(paragraph) for paragraph in data["body_text"]
             ],

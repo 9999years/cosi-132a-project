@@ -1,7 +1,11 @@
 { pkgs ? import <nixpkgs> { }, }:
 let
   inherit (pkgs) stdenv lib fetchurl fetchzip python38;
+  # `py` is the Python distribution.
+  # `nix/python.nix` contains overrides for several packages to update/fix them
+  # for Python 3.8.
   py = import nix/python.nix { python = python38; };
+  # `pypkgs` is the set of python packages.
   pypkgs = py.pkgs;
 
   # Development dependencies, for linting etc.
@@ -15,13 +19,32 @@ let
     rope # refactoring library used by lang servers
     pydocstyle # docstring style
     coverage # unit test coverage
-  ]) ++ [ (import ./nix/doctestmod.nix pkgs) ];
+    (import ./nix/doctestmod.nix pkgs) # doctesting individual files
+  ]);
 
   stanford-ner = fetchzip {
     url = "https://nlp.stanford.edu/software/stanford-ner-2018-10-16.zip";
     sha256 = "08b2jm7lx6rpg4a736z235m9fcg7y9qb748cai5hicla138r7r49";
     extraPostFetch = ''
       chmod go-w $out
+    '';
+  };
+
+  nltk-data = stdenv.mkDerivation rec {
+    name = "nltk-data-tokenizers-punkt";
+    version = "0.0.0";
+    src = fetchzip {
+      url =
+        "https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt.zip";
+      sha256 = "113cv87dj5ml7g8pjm7psk4q1hrf0zqpmc945lmpdz91vp2wn1nc";
+      extraPostFetch = ''
+        chmod go-w $out
+      '';
+    };
+    phases = [ "installPhase" ];
+    installPhase = ''
+      mkdir -p $out/tokenizers/
+      cp -r $src $out/tokenizers/punkt
     '';
   };
 
@@ -41,29 +64,23 @@ let
           # my deps
           attrs
           cached-property
-        ] ++ (if dev then devDeps else [ ]);
+        ] ++ [ nltk-data ] ++ (if dev then devDeps else [ ]);
 
-      shellHook = ''
-        export STANFORD_MODELS="${stanford-ner}/classifiers";
-      '';
+      STANFORD_MODELS = "${stanford-ner}/classifiers";
+      NLTK_DATA = "${nltk-data}";
     };
 
   name = "ir-final";
 
-  mkUnzip = { src, name, ... }@attrs:
-    stdenv.mkDerivation ({
-      buildInputs = with pkgs; [ unzip ];
-      phases = [ "installPhase" ];
-      installPhase = ''
-        mkdir $out
-        unzip $src -d $out
-      '';
-    } // attrs);
-
 in {
-  data = mkUnzip {
+  data = stdenv.mkDerivation {
     name = "${name}-data";
     src = ./raw_data/CORD-19-research-challenge.zip;
+    buildInputs = with pkgs; [ unzip ];
+    phases = [ "installPhase" ];
+    installPhase = ''
+      unzip $src -d $out
+    '';
   };
 
   inherit stanford-ner;

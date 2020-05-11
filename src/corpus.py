@@ -11,6 +11,7 @@ import os
 from os import path
 import json
 import enum
+from itertools import chain
 
 import attr
 from cached_property import cached_property
@@ -179,13 +180,6 @@ class Article:
                 "Article must be initialized with a non-None Corpus to access"
                 + kind.dir_name
                 + "data."
-            )
-
-        if self.full_text_file not in kind.full_text_file_values:
-            raise ValueError(
-                "Article must be in one of"
-                + ", ".join(kind.full_text_file_values)
-                + f"datasets to access {kind.dir_name} data, not {self.full_text_file}"
             )
 
     def _json_path(self, kind: _FullTextKind, sha: t.Optional[str] = None) -> str:
@@ -372,15 +366,22 @@ class Corpus:
             for row in reader:
                 yield t.cast(ArticleCSV, row)
 
-    def _articles(self) -> t.Iterator[Article]:
+    def articles(self) -> t.Iterator[Article]:
         for article in self._read_articles():
             yield Article.from_row(article, corpus=self)
 
     @cached_property
-    def articles(self) -> t.List[Article]:
+    def articles_list(self) -> t.List[Article]:
         """Get a list of article metadata.
         """
-        return list(self._articles())
+        return list(self.articles())
+
+    def article_text(self) -> t.Iterator[t.Tuple[Article, FullText]]:
+        """Get the full text for each article.
+        """
+        for article in self.articles():
+            for fulltext in chain(article.pdf_json(), article.pmc_json()):
+                yield article, fulltext
 
     def article_from_uid(self, uid: UID) -> Article:
         """Get the Article with a given cord_uid.
@@ -407,15 +408,16 @@ class Corpus:
                 url='https://www.ncbi.nlm.nih.gov/pmc/articles/PMC261870/',
                 ...)
         """
-        for article in self._articles():
+        for article in self.articles():
             if article.cord_uid == uid:
                 return article
         raise KeyError(f"No article with cord_uid {uid} found.")
 
     @property
     def embeddings(self) -> t.Iterator[t.Tuple[UID, t.List[float]]]:
-        """Iterator over embedding data from the ``cord_19_embeddings_4_17``
-        directory.
+        """Iterator over embedding data.
+
+        Loads data from the ``cord_19_embeddings_4_17`` directory.
 
         If a full dict is needed, use the ``embeddings_dict`` method, but note
         that the resulting object will be ~1GB.
