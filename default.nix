@@ -12,7 +12,7 @@ let
     jedi # completion
     ptpython # repl
     pytest # unit tests
-    # rope # ???
+    rope # refactoring library used by lang servers
     pydocstyle # docstring style
     coverage # unit test coverage
   ]) ++ [ (import ./nix/doctestmod.nix pkgs) ];

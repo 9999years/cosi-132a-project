@@ -83,5 +83,15 @@ python.override {
         sha256 = "0i823qd5wk3jwhm33vkq1qdkxjf1h8fdvdrmii1305ls7x7133jq";
       };
     });
+
+    rope = super.rope.overridePythonAttrs rec {
+      pname = "rope";
+      version = "0.17.0";
+
+      src = super.fetchPypi {
+        inherit pname version;
+        sha256 = "1qa9nqryp05ah9b4r8cy5ph31kr9cm4ak79pvzbg7p23bxqdd2k5";
+      };
+    };
   };
 }
