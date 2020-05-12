@@ -27,6 +27,7 @@ def main() -> None:
             display_locations.append(
                 {
                     "location": loc.locationName,
+                    "matched_text": loc.match,
                     "country": loc.country,
                     "window": "..."
                     + text[loc.start - window : loc.end + window]
