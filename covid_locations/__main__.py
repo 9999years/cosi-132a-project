@@ -1,16 +1,46 @@
 """Entry script.
 """
 import json
-import pprint
+import argparse
+import shlex
 
 from . import ir
 from .corpus import Corpus
 
 
+def argparser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data",
+        help="""
+        Data directory containing an unzipped CORD-19-research-challenge.zip
+        corpus, which can be downloaded from https://www.kaggle.com/allen-institute-for-ai/CORD-19-research-challenge.
+        """,
+    )
+    parser.add_argument(
+        "--geoindex",
+        help="""
+        Prebuilt lucene geoindex used by the CLAVIN location and reverse-geocoding server.
+        https://github.com/Novetta/CLAVIN
+        """,
+    )
+    parser.add_argument(
+        "--ner-server",
+        type=shlex.split,
+        help="""
+        NER server binary; spaces will be split with shlex.
+        """,
+    )
+    return parser
+
+
 def main() -> None:
     """Entry point.
     """
-    corpus = Corpus()
+    args = argparser().parse_args()
+    corpus = Corpus(
+        data_dir=args.data, geoindex=args.geoindex, ner_server=args.ner_server,
+    )
     tagger = corpus.location_tagger
     window = 50
     for article, fulltext in corpus.article_text():

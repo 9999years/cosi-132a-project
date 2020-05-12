@@ -15,7 +15,6 @@ from itertools import chain
 
 import attr
 from cached_property import cached_property
-from nltk.tag import StanfordNERTagger, StanfordTagger
 
 from .pdf_json import FullText, JSONFullText
 from .util import optional, path_from_repo
@@ -277,37 +276,6 @@ def _validate_data_dir(
         )
 
 
-_REQUIRED_STANFORD_NER_DIR_FILES = {
-    "classifiers",
-    "stanford-ner.jar",
-}
-
-
-def _validate_stanford_ner_dir(
-    _instance: Corpus, _attribute: attr.Attribute[str], stanford_ner_dir: str
-) -> None:
-    """Ensure that a given path likely contains the unzipped Stanford NER data.
-
-    Note that this just checks for top-level files and folders, and doesn't
-    confirm the entire directory tree or the data in any of the files.
-    """
-    if not path.exists(stanford_ner_dir):
-        raise ValueError(
-            f"Expected to find a data directory at {stanford_ner_dir} containing at "
-            + f"least the files/directories {_REQUIRED_STANFORD_NER_DIR_FILES}, "
-            + "but the directory doesn't appear to exist."
-        )
-    if missing_files := _REQUIRED_STANFORD_NER_DIR_FILES - set(
-        os.listdir(stanford_ner_dir)
-    ):
-        raise ValueError(
-            "The following files/directories were expected in "
-            + path.realpath(stanford_ner_dir)
-            + " but not found: "
-            + ", ".join(missing_files)
-        )
-
-
 @attr.s(auto_attribs=True)
 class Corpus:
     """Provides access to the CORD-19 dataset.
@@ -346,9 +314,9 @@ class Corpus:
     data_dir: str = attr.ib(
         default=path_from_repo("data"), validator=_validate_data_dir,
     )
-
-    stanford_ner_dir: str = attr.ib(
-        default=path_from_repo("stanford-ner"), validator=_validate_stanford_ner_dir,
+    geoindex: str = path_from_repo("ner-server", "geoindex")
+    ner_server: t.List[str] = attr.ib(
+        factory=lambda: [path_from_repo("ner-server", "ner-server")]
     )
 
     def _data_path(self, *components: str) -> str:
@@ -356,10 +324,7 @@ class Corpus:
 
     @cached_property
     def location_tagger(self) -> LocationTagger:
-        return LocationTagger(
-            index=path_from_repo("ner-server", "geoindex",),
-            server_executable=[path_from_repo("ner-server", "ner-server")],
-        )
+        return LocationTagger(index=self.geoindex, server_executable=self.ner_server)
 
     def _read_articles(self) -> t.Iterator[ArticleCSV]:
         with open(self._data_path("metadata.csv"), newline="") as f:

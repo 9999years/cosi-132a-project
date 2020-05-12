@@ -2,7 +2,8 @@
 let
   inherit (pkgs) stdenv lib fetchurl fetchzip javaPackages;
   jdk = pkgs.adoptopenjdk-bin;
-  stanford-ner = import ../nix/stanford-ner.nix pkgs;
+
+  classPath = jars: ".:${lib.concatStringsSep ":" jars}";
 
   fetchMaven = { groupId, artifactId, version
     , repo ? "https://repo1.maven.org/maven2/", type ? "jar", ... }@attrs:
@@ -64,7 +65,7 @@ let
 
     javaBuildInputs = [ clavin-jar ] ++ clavin-deps;
 
-    CLASSPATH = ".:${lib.concatStringsSep ":" javaBuildInputs}";
+    CLASSPATH = classPath javaBuildInputs;
 
     dontConfigure = true;
     buildPhase = ''
@@ -78,20 +79,37 @@ let
   };
 
 in rec {
-  inherit jackson geoindex clavin-jar stanford-ner;
+  inherit jackson geoindex clavin-jar;
 
   bin = stdenv.mkDerivation rec {
     name = "ner-server";
     version = "0.0.0";
 
-    src = ./.;
+    srcs = [
+      ./Response.java
+      ./NERServer.java
+      ./Location.java
+      ./ClassifyResponse.java
+      ./ClassifyMessage.java
+      ./ErrorResponse.java
+      ./SetIndexResponse.java
+      ./Message.java
+      ./SetIndexMessage.java
+    ];
+    sourceRoot = ".";
+    unpackPhase = ''
+      for f in $srcs
+      do
+        cp $f "$(stripHash $f)"
+      done
+    '';
 
     buildInputs = with pkgs; [ ] ++ [ jdk makeWrapper ];
     javaBuildInputs =
       [ clavin-jar jackson.core jackson.databind jackson.annotations ]
       ++ clavin-deps;
 
-    CLASSPATH = ".:${lib.concatStringsSep ":" javaBuildInputs}";
+    CLASSPATH = classPath javaBuildInputs;
 
     dontConfigure = true;
     buildPhase = ''
@@ -103,9 +121,12 @@ in rec {
       cp *.class $out/bin/
       makeWrapper ${jdk}/bin/java \
         $out/bin/ner-server \
-        --set CLASSPATH "$out/bin:$CLASSPATH" \
+        --prefix CLASSPATH : "$out/bin:$CLASSPATH" \
         --argv0 ner-server \
         --add-flags NERServer
+
+      mkdir -p $out/share/data/
+      ln -s ${geoindex} $out/share/data/geoindex
     '';
   };
 

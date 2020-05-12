@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> { }, }:
 let
-  inherit (pkgs) stdenv lib fetchurl fetchzip unzip python38;
+  inherit (pkgs) stdenv lib fetchurl fetchzip unzip requireFile python38;
   # `py` is the Python distribution.
   # `nix/python.nix` contains overrides for several packages to update/fix them
   # for Python 3.8.
@@ -22,7 +22,22 @@ let
     (import ./nix/doctestmod.nix pkgs) # doctesting individual files
   ]);
 
-  stanford-ner = import nix/stanford-ner.nix pkgs;
+  corpus-zip = requireFile {
+    name = "CORD-19-research-challenge.zip";
+    sha256 = "05ykq44nda9wzh2rybfi825xqnx5jrw85jamzp43dsdwjsyccdfh";
+    url =
+      "https://www.kaggle.com/allen-institute-for-ai/CORD-19-research-challenge";
+  };
+
+  corpus = stdenv.mkDerivation {
+    name = "${name}-data";
+    src = corpus-zip;
+    buildInputs = with pkgs; [ unzip ];
+    phases = [ "installPhase" ];
+    installPhase = ''
+      unzip $src -d $out
+    '';
+  };
 
   nltk-data = stdenv.mkDerivation rec {
     name = "nltk-data-tokenizers-punkt";
@@ -45,10 +60,10 @@ let
   ner-server = import ./ner-server { inherit pkgs; };
 
   project = { dev ? false, }:
-    stdenv.mkDerivation {
+    stdenv.mkDerivation rec {
       inherit name;
       version = "0.0.0";
-      src = if lib.inNixShell then null else ./.;
+      src = ./.;
 
       buildInputs = with pypkgs;
         [
@@ -60,30 +75,39 @@ let
           # my deps
           attrs
           cached-property
-        ] ++ [ nltk-data ner-server ] ++ (if dev then devDeps else [ ]);
+        ] ++ [ nltk-data ner-server.bin ] ++ (with pkgs; [ makeWrapper ])
+        ++ (if dev then devDeps else [ ]);
 
       shellHook = ''
-        ln -s ${ner-server}/bin/ner-server ner-server/ner-server
+        #
       '';
 
-      STANFORD_MODELS = "${stanford-ner}/classifiers";
+      buildPhase = ''
+        mkdir -p $out/bin
+        makeWrapper ${py}/bin/python \
+          $out/bin/get-locations \
+          --argv0 get-locations \
+          --prefix PYTHONPATH : $out/${py.sitePackages} \
+          --add-flags "-m covid_locations --data $CORPUS --geoindex $GEOINDEX --ner-server $NER_SERVER" \
+      '';
+
+      installPhase = ''
+        mkdir -p $out/${py.sitePackages}
+        cp -r covid_locations $out/${py.sitePackages}/
+      '';
+
+      CORPUS = "${corpus}";
+      NER_SERVER = "${ner-server.bin}/bin/ner-server";
+      GEOINDEX = "${ner-server.bin}/share/data/geoindex";
       NLTK_DATA = "${nltk-data}";
     };
 
   name = "ir-final";
 
 in {
-  data = stdenv.mkDerivation {
-    name = "${name}-data";
-    src = ./raw_data/CORD-19-research-challenge.zip;
-    buildInputs = with pkgs; [ unzip ];
-    phases = [ "installPhase" ];
-    installPhase = ''
-      unzip $src -d $out
-    '';
-  };
+  data = corpus;
 
-  inherit stanford-ner;
+  bin = project { dev = false; };
 
   shell = project { dev = true; };
 }
