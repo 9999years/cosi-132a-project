@@ -355,15 +355,13 @@ class Corpus:
         return path.join(self.data_dir, *components)
 
     @cached_property
-    def _location_tagger(self) -> LocationTagger:
+    def location_tagger(self) -> LocationTagger:
         return LocationTagger(
             classifier=path.join(
                 self.stanford_ner_dir,
                 "classifiers/english.all.3class.distsim.crf.ser.gz",
             ),
-            server_executable=[
-                path_from_repo("ner-server", "ner-server")
-            ],
+            server_executable=[path_from_repo("ner-server", "ner-server")],
         )
 
     def _read_articles(self) -> t.Iterator[ArticleCSV]:

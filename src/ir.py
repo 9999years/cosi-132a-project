@@ -52,7 +52,7 @@ class LocationTagger:
     server_executable: t.List[str]
     _proc: Popen = t.cast(Popen, None)
 
-    def _check_server(self):
+    def _check_server(self) -> None:
         if self._proc.poll() is not None:
             raise ValueError(
                 "Server died:\n" + self._proc.communicate()[1].decode("utf-8")
@@ -93,6 +93,9 @@ class LocationTagger:
             if tok.classification is not None:
                 ret.append(tok)
         return ret
+
+    def close(self):
+        self._proc.kill()
 
 
 _LOCATION_FALSE_POSITIVES = [

@@ -10,7 +10,7 @@ def main() -> None:
     """Entry point.
     """
     corpus = Corpus()
-    tagger = corpus._location_tagger
+    tagger = corpus.location_tagger
     i = 0
     for article, fulltext in corpus.article_text():
         print(" " * 8, article.cord_uid, ":", article.title, f"({article.url})")
