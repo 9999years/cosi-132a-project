@@ -19,6 +19,7 @@ from nltk.tag import StanfordNERTagger, StanfordTagger
 
 from .pdf_json import FullText, JSONFullText
 from .util import optional, path_from_repo
+from .ir import LocationTagger
 
 _DATETIME_2020 = datetime(2020, 1, 1)
 
@@ -354,10 +355,15 @@ class Corpus:
         return path.join(self.data_dir, *components)
 
     @cached_property
-    def _location_tagger(self) -> StanfordTagger:
-        return StanfordNERTagger(
-            "english.all.3class.distsim.crf.ser.gz",
-            path_to_jar=path.join(self.stanford_ner_dir, "stanford-ner.jar"),
+    def _location_tagger(self) -> LocationTagger:
+        return LocationTagger(
+            classifier=path.join(
+                self.stanford_ner_dir,
+                "classifiers/english.all.3class.distsim.crf.ser.gz",
+            ),
+            server_executable=[
+                path_from_repo("ner-server", "result", "bin", "ner-server")
+            ],
         )
 
     def _read_articles(self) -> t.Iterator[ArticleCSV]:
