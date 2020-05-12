@@ -60,7 +60,11 @@ let
           # my deps
           attrs
           cached-property
-        ] ++ [ nltk-data ] ++ (if dev then devDeps else [ ]);
+        ] ++ [ nltk-data ner-server ] ++ (if dev then devDeps else [ ]);
+
+      shellHook = ''
+        ln -s ${ner-server}/bin/ner-server ner-server/ner-server
+      '';
 
       STANFORD_MODELS = "${stanford-ner}/classifiers";
       NLTK_DATA = "${nltk-data}";

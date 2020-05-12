@@ -362,7 +362,7 @@ class Corpus:
                 "classifiers/english.all.3class.distsim.crf.ser.gz",
             ),
             server_executable=[
-                path_from_repo("ner-server", "result", "bin", "ner-server")
+                path_from_repo("ner-server", "ner-server")
             ],
         )
 
