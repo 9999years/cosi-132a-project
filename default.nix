@@ -103,6 +103,10 @@ let
 
         mkdir -p $out/share/data/
         cp locations.json $out/share/data/
+
+        ln -s $NER_SERVER $out/bin/ner-server
+        ln -s $GEOINDEX $out/share/data/geoindex
+        ln -s $CORPUS $out/share/data/cord-19
       '';
 
       CORPUS = "${corpus}";
