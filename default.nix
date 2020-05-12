@@ -69,8 +69,6 @@ let
         [
           nltk
           flask
-          elasticsearch
-          elasticsearch-dsl
 
           # my deps
           attrs
@@ -83,17 +81,28 @@ let
       '';
 
       buildPhase = ''
+        newpypath="$out/${py.sitePackages}:$PYTHONPATH"
         mkdir -p $out/bin
         makeWrapper ${py}/bin/python \
           $out/bin/get-locations \
           --argv0 get-locations \
-          --prefix PYTHONPATH : $out/${py.sitePackages} \
-          --add-flags "-m covid_locations --data $CORPUS --geoindex $GEOINDEX --ner-server $NER_SERVER" \
+          --prefix PYTHONPATH : "$PYTHONPATH" \
+          --add-flags "-m covid_locations --data $CORPUS --geoindex $GEOINDEX --ner-server $NER_SERVER"
+
+        makeWrapper ${py}/bin/python \
+          $out/bin/visualize-locations \
+          --argv0 visualize-locations \
+          --prefix PYTHONPATH : "$PYTHONPATH" \
+          --add-flags "-m covid_visualization --locations $out/share/data/locations.json --templates $out/${py.sitePackages}/covid_visualization/templates"
       '';
 
       installPhase = ''
         mkdir -p $out/${py.sitePackages}
         cp -r covid_locations $out/${py.sitePackages}/
+        cp -r covid_visualization $out/${py.sitePackages}/
+
+        mkdir -p $out/share/data/
+        cp locations.json $out/share/data/
       '';
 
       CORPUS = "${corpus}";
