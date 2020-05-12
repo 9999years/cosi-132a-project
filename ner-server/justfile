@@ -1,0 +1,5 @@
+build:
+	nix-build -A bin -o target
+
+shell:
+	nix-shell -A bin

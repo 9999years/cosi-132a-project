@@ -1,15 +1,22 @@
 { pkgs ? import <nixpkgs> { }, }:
 let
-  inherit (pkgs) stdenv lib fetchurl;
+  inherit (pkgs) stdenv lib fetchurl fetchzip javaPackages;
   jdk = pkgs.adoptopenjdk-bin;
   stanford-ner = import ../nix/stanford-ner.nix pkgs;
 
-  fetchMaven = { groupId, artifactId, version, ... }@attrs:
+  fetchMaven = { groupId, artifactId, version
+    , repo ? "https://repo1.maven.org/maven2/", type ? "jar", ... }@attrs:
     fetchurl ({
-      url = "https://repo1.maven.org/maven2/${
+      url = "${repo}${
           lib.replaceStrings [ "." ] [ "/" ] groupId
-        }/${artifactId}/${version}/${artifactId}-${version}.jar";
-    } // (removeAttrs attrs [ "groupId" "artifactId" "version" ]));
+        }/${artifactId}/${version}/${artifactId}-${version}.${type}";
+    } // (removeAttrs attrs [
+      "groupId"
+      "artifactId"
+      "version"
+      "repo"
+      "type"
+    ]));
 
   jackson = let
     groupId = "com.fasterxml.jackson.core";
@@ -34,30 +41,73 @@ let
     };
   };
 
-in stdenv.mkDerivation {
-  name = "ner-server";
-  version = "0.0.0";
+  allCountries = fetchzip {
+    url = "http://download.geonames.org/export/dump/allCountries.zip";
+    sha256 = "0r7iwwhw92khynam6bicam0ldpdnyykl3rz31pi57c0j54fklxx8";
+  };
 
-  src = ./.;
+  clavin-jar = fetchMaven {
+    groupId = "com.bericotech";
+    artifactId = "clavin";
+    version = "2.1.0";
+    sha256 = "1cdcm734vrflv6n9c6zhhp8qjg2yys6kzl2izm8cbj1m4jw216n9";
+  };
 
-  buildInputs = with pkgs; [ ] ++ [ jdk stanford-ner makeWrapper ];
+  clavin-deps = import ./clavin.nix { inherit fetchMaven; };
 
-  CLASSPATH =
-    ".:${jackson.core}:${jackson.databind}:${jackson.annotations}:${stanford-ner}/stanford-ner.jar";
+  geoindex = stdenv.mkDerivation rec {
+    name = "geoindex";
+    version = "0.0.0";
 
-  dontConfigure = true;
-  buildPhase = ''
-    javac *.java
-  '';
+    src = clavin-jar;
+    dontUnpack = true;
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp *.class $out/bin/
-    makeWrapper ${jdk}/bin/java \
-      $out/bin/ner-server \
-      --set CLASSPATH "$out/bin:$CLASSPATH" \
-      --set STANFORD_MODELS "${stanford-ner}/classifiers" \
-      --argv0 ner-server \
-      --add-flags NERServer
-  '';
+    javaBuildInputs = [ clavin-jar ] ++ clavin-deps;
+
+    CLASSPATH = ".:${lib.concatStringsSep ":" javaBuildInputs}";
+
+    dontConfigure = true;
+    buildPhase = ''
+      ln -s ${allCountries}/allCountries.txt allCountries.txt
+      ${jdk}/bin/java com.bericotech.clavin.index.IndexDirectoryBuilder
+    '';
+
+    installPhase = ''
+      mv IndexDirectory $out
+    '';
+  };
+
+in rec {
+  inherit jackson geoindex clavin-jar stanford-ner;
+
+  bin = stdenv.mkDerivation rec {
+    name = "ner-server";
+    version = "0.0.0";
+
+    src = ./.;
+
+    buildInputs = with pkgs; [ ] ++ [ jdk makeWrapper ];
+    javaBuildInputs =
+      [ clavin-jar jackson.core jackson.databind jackson.annotations ]
+      ++ clavin-deps;
+
+    CLASSPATH = ".:${lib.concatStringsSep ":" javaBuildInputs}";
+
+    dontConfigure = true;
+    buildPhase = ''
+      javac *.java
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin
+      cp *.class $out/bin/
+      makeWrapper ${jdk}/bin/java \
+        $out/bin/ner-server \
+        --set CLASSPATH "$out/bin:$CLASSPATH" \
+        --argv0 ner-server \
+        --add-flags NERServer
+    '';
+  };
+
+  shell = bin;
 }

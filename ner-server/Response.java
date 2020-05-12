@@ -4,7 +4,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = As.PROPERTY, property = "action")
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = SetClassifierResponse.class, name = "set-classifier")
+    @JsonSubTypes.Type(value = SetIndexResponse.class, name = "set-index"),
+    @JsonSubTypes.Type(value = ClassifyResponse.class, name = "classify")
 })
 public class Response {
     public String uuid;

@@ -26,28 +26,36 @@ def words(text: str) -> t.List[Token]:
 class JSONClassifiedToken(t.TypedDict):
     start: int
     end: int
-    classification: str
     text: str
     confidence: float
+    match: str
+    locationName: str
+    country: str
+    latitude: float
+    longitude: float
 
 
 @attr.s(auto_attribs=True)
-class ClassifiedToken:
+class ResolvedLocation:
     start: int
     end: int
-    classification: str
     text: str
     confidence: float
+    match: str
+    locationName: str
+    country: str
+    latitude: float
+    longitude: float
 
     @classmethod
-    def from_json(cls, data: JSONClassifiedToken) -> ClassifiedToken:
+    def from_json(cls, data: JSONClassifiedToken) -> ResolvedLocation:
         return cls(**data)
 
 
 @attr.s(auto_attribs=True)
 class LocationTagger:
     # Classifier filename
-    classifier: str
+    index: str
     # Args to the server
     server_executable: t.List[str]
     _proc: Popen = t.cast(Popen, None)
@@ -64,10 +72,21 @@ class LocationTagger:
         message["uuid"] = uuid_
         serialized = json.dumps(message)
         self._proc.stdin.write(serialized.encode("utf-8"))
-        self._proc.stdin.write(b"\n")
+        self._proc.stdin.write(b"\n\n")
         self._proc.stdin.flush()
 
-        raw_resp = self._proc.stdout.readline()
+        skipping_blanks = True
+        lines = []
+        while True:
+            line = self._proc.stdout.readline().decode("utf-8").strip()
+            if skipping_blanks:
+                if line:
+                    skipping_blanks = False
+            elif not line:
+                break
+            lines.append(line)
+        raw_resp = "\n".join(lines)
+
         resp = json.loads(raw_resp)
         if resp["action"] != message["action"] or resp["uuid"] != uuid_:
             raise ValueError(f"Bad server response: {resp}")
@@ -82,17 +101,12 @@ class LocationTagger:
         )
 
         self._message(
-            {"action": "set-classifier", "classifier": self.classifier,}
+            {"action": "set-index", "index": self.index,}
         )
 
-    def classify(self, text: str) -> t.List[ClassifiedToken]:
+    def classify(self, text: str) -> t.List[ResolvedLocation]:
         resp = self._message({"action": "classify", "text": text,})
-        ret = []
-        for data in resp["tokens"]:
-            tok = ClassifiedToken.from_json(data)
-            if tok.classification is not None:
-                ret.append(tok)
-        return ret
+        return [ResolvedLocation.from_json(data) for data in resp["locations"]]
 
     def close(self):
         self._proc.kill()

@@ -357,10 +357,7 @@ class Corpus:
     @cached_property
     def location_tagger(self) -> LocationTagger:
         return LocationTagger(
-            classifier=path.join(
-                self.stanford_ner_dir,
-                "classifiers/english.all.3class.distsim.crf.ser.gz",
-            ),
+            index=path_from_repo("ner-server", "geoindex",),
             server_executable=[path_from_repo("ner-server", "ner-server")],
         )
 
