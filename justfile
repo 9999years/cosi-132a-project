@@ -1,14 +1,10 @@
 # Run the program (in nix-shell)
 run:
-	python3.8 -m src
+	python3.8 -m covid_locations
 
 # Generate the `data` dir from the `raw_data` dir.
 data:
 	nix-build -A data -o data
-
-# Downloads and extracts the Stanford Named Entity Recognizer.
-stanford-ner:
-	nix-build -A stanford-ner -o stanford-ner
 
 # Launch a nix-shell for development
 shell:
@@ -16,7 +12,7 @@ shell:
 
 # Generate the source tar
 tar:
-	nix-build -A tar --out-link rebeccaturner-hw5.tar.xz
+	nix-build -A tar -o rebecca-turner-and-ella-tuson-final.tar.gz
 
 # Generate the source zip
 zip:
@@ -48,3 +44,6 @@ test:
 coverage:
 	coverage run --source=. -m pytest
 	coverage report -m
+
+readme:
+	nix-build -A README.pdf -o README.pdf

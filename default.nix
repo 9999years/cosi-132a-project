@@ -8,6 +8,9 @@ let
   # `pypkgs` is the set of python packages.
   pypkgs = py.pkgs;
 
+  # Markdown -> PDF conversion
+  rmd = import nix/rmd.nix { inherit pkgs; };
+
   # Development dependencies, for linting etc.
   devDeps = (with pypkgs; [
     mypy # type checking
@@ -120,7 +123,39 @@ let
 in {
   data = corpus;
 
+  README = rmd.convert {
+    basename = "README";
+    src = ./README.md;
+    frontMatter = ''
+      title: COVID-19 Location Extraction & Visualization
+      author: Rebecca Turner and Ella Tuson
+      date: 2020-05-12
+    '';
+  };
+
   bin = project { dev = false; };
 
   shell = project { dev = true; };
+
+  tar = stdenv.mkDerivation {
+    name = "${name}-src.tar.gz";
+    version = "0.0.0";
+
+    src = ./.;
+
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = ''
+      tar -czf $out \
+        --transform="s|^|rebecca-turner-and-ella-tuson-final/|g" \
+        --show-transformed-names \
+        --exclude "*__pycache__*" \
+        .coveragerc locations.json covid_locations covid_visualization \
+        default.nix justfile LICENSE mypy.ini nix pylintrc \
+        pytest.ini README.md shell.nix test type-stubs \
+        ner-server/*.java ner-server/default.nix ner-server/clavin.nix \
+        ner-server/justfile
+    '';
+  };
 }
